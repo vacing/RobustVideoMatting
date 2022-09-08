@@ -16,6 +16,8 @@ class SuperviselyPersonDataset(Dataset):
         return len(self.img_files)
     
     def __getitem__(self, idx):
+        if idx % 1000 == 0:
+            print("%s : %d" % (__file__, idx))
         with Image.open(os.path.join(self.img_dir, self.img_files[idx])) as img, \
              Image.open(os.path.join(self.seg_dir, self.seg_files[idx])) as seg:
             img = img.convert('RGB')

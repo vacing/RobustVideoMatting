@@ -45,6 +45,8 @@ class YouTubeVISDataset(Dataset):
         return len(self.index)
     
     def __getitem__(self, idx):
+        if idx % 1000 == 0:
+            print("%s : %d" % (__file__, idx))
         video_id, frame_id = self.index[idx]
         video = self.videos[video_id]
         frame_count = len(self.videos[video_id]['file_names'])

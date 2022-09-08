@@ -38,6 +38,8 @@ class VideoMatteDataset(Dataset):
         return len(self.videomatte_idx)
     
     def __getitem__(self, idx):
+        if idx % 1000 == 0:
+            print("%s : %d" % (__file__, idx))
         if random.random() < 0.5:
             bgrs = self._get_random_image_background()
         else:

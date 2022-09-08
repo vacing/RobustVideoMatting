@@ -26,6 +26,8 @@ class CocoPanopticDataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
+        if idx % 1000 == 0:
+            print("%s : %d" % (__file__, idx))
         data = self.data[idx]
         img = self._load_img(data)
         seg = self._load_seg(data)

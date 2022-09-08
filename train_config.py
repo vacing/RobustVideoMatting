@@ -30,39 +30,50 @@ Background Video Train/Valid
 
 """
 
-
+AIDataPrefix = "/apdcephfs_cq2/share_1630463/portrait_matting/"
 DATA_PATHS = {
-    
+    # Matting Datasets
     'videomatte': {
-        'train': '../matting-data/VideoMatte240K_JPEG_SD/train',
-        'valid': '../matting-data/VideoMatte240K_JPEG_SD/valid',
+        'train': AIDataPrefix + 'VideoMatte240K_JPEG_SD/train',
+        'valid': AIDataPrefix + 'VideoMatte240K_JPEG_SD/test',
     },
     'imagematte': {
-        'train': '../matting-data/ImageMatte/train',
-        'valid': '../matting-data/ImageMatte/valid',
+        'train': AIDataPrefix + 'ImageMatte/train',
+        'valid': AIDataPrefix + 'ImageMatte/valid',
     },
+
+    # Background Datasets
     'background_images': {
-        'train': '../matting-data/Backgrounds/train',
-        'valid': '../matting-data/Backgrounds/valid',
+        'train': AIDataPrefix + 'BackgroundImages/train',
+        'valid': AIDataPrefix + 'BackgroundImages/valid',
     },
     'background_videos': {
-        'train': '../matting-data/BackgroundVideos/train',
-        'valid': '../matting-data/BackgroundVideos/valid',
+        'train': AIDataPrefix + 'BackgroundVideos/train',
+        'valid': AIDataPrefix + 'BackgroundVideos/valid',
     },
     
-    
+    # Segmentation Datasets
     'coco_panoptic': {
-        'imgdir': '../matting-data/coco/train2017/',
-        'anndir': '../matting-data/coco/panoptic_train2017/',
-        'annfile': '../matting-data/coco/annotations/panoptic_train2017.json',
+        'imgdir': AIDataPrefix + 'coco/train2017/',
+        'anndir': AIDataPrefix + 'coco/annotations/panoptic_train2017/',
+        'annfile': AIDataPrefix + 'coco/annotations/panoptic_train2017.json',
     },
     'spd': {
-        'imgdir': '../matting-data/SuperviselyPersonDataset/img',
-        'segdir': '../matting-data/SuperviselyPersonDataset/seg',
+        'imgdir': AIDataPrefix + 'SuperviselyPersonDataset/img',
+        'segdir': AIDataPrefix + 'SuperviselyPersonDataset/seg',
     },
     'youtubevis': {
-        'videodir': '../matting-data/YouTubeVIS/train/JPEGImages',
-        'annfile': '../matting-data/YouTubeVIS/train/instances.json',
+        'videodir': AIDataPrefix + 'YouTubeVIS/train/JPEGImages',
+        'annfile': AIDataPrefix + 'YouTubeVIS/train/instances.json',
     }
     
 }
+
+import os
+if __name__ == '__main__':
+    for pkey, pval in DATA_PATHS.items():
+        for stage, path in pval.items():
+            if not os.path.exists(path):
+                print("[%s][%s][%s] Not Exists" % (pkey, stage, path))
+
+
