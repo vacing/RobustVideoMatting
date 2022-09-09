@@ -9,7 +9,7 @@ if __name__ == "__main__":
     print(pths)
     epoch = 0;
     for i in range(0, 100):
-        epoch_file = "epoch-" + str(i+1) + ".pth"
+        epoch_file = "epoch-" + str(i) + ".pth"
         # print(epoch_file)
         if not epoch_file in pths:
             epoch = i;

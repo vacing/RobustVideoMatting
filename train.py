@@ -366,10 +366,10 @@ class Trainer:
                     true_img, true_seg = self.load_next_seg_image_sample()
                     self.train_seg(true_img.unsqueeze(1), true_seg.unsqueeze(1), log_label='seg_image')
                     
-                if self.step % self.args.checkpoint_save_interval == 0:
-                    self.save()
-                    
                 self.step += 1
+
+            # save model every epoch
+            self.save()
                 
     def train_mat(self, true_fgr, true_pha, true_bgr, downsample_ratio, tag):
         true_fgr = true_fgr.to(self.rank, non_blocking=True)
