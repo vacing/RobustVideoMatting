@@ -33,9 +33,13 @@ Background Video Train/Valid
 AIDataPrefix = "/apdcephfs_cq2/share_1630463/portrait_matting/"
 DATA_PATHS = {
     # Matting Datasets
-    'videomatte': {
+    'videomatteSD': {
         'train': AIDataPrefix + 'VideoMatte240K_JPEG_SD/train',
         'valid': AIDataPrefix + 'VideoMatte240K_JPEG_SD/test',
+    },
+    'videomatte': {
+        'train': AIDataPrefix + 'VideoMatte240K_JPEG_HD/train',
+        'valid': AIDataPrefix + 'VideoMatte240K_JPEG_HD/test',
     },
     'imagematte': {
         'train': AIDataPrefix + 'ImageMatte/train',
