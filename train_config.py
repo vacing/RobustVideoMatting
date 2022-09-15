@@ -42,8 +42,8 @@ DATA_PATHS = {
         'valid': AIDataPrefix + 'VideoMatte240K_JPEG_HD/test',
     },
     'imagematte': {
-        'train': AIDataPrefix + 'ImageMatte/train',
-        'valid': AIDataPrefix + 'ImageMatte/valid',
+        'train': AIDataPrefix + 'vacing_self/train',
+        'valid': AIDataPrefix + 'vacing_self/test',
     },
 
     # Background Datasets

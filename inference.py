@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from typing import Optional, Tuple
 from tqdm.auto import tqdm
+from vcom_python import util_file as ufile
 
 from inference_utils import VideoReader, VideoWriter, ImageSequenceReader, ImageSequenceWriter
 
@@ -70,6 +71,10 @@ def convert_video(model,
     else:
         transform = transforms.ToTensor()
 
+    _, name, _ = ufile.sep_path_segs(input_source)
+    output_foreground = name + output_foreground
+    output_alpha = name + output_alpha
+    output_composition = name + output_composition
     # Initialize reader
     if os.path.isfile(input_source):
         source = VideoReader(input_source, transform)

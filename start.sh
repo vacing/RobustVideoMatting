@@ -2,7 +2,10 @@
 set -x
 ChekPointPath="/apdcephfs_cq2/share_1630463/portrait_matting_cache/"
 pip3 install -r requirements_training.txt
-echo "start.sh" >> ${ChekPointPath}/__shell.log
+echo "start.sh" >> ${ChekPointPath}/__shell_start.log
+end_log=${ChekPointPath}/__shell_end.log
+
+# find epoch
 python3 find_next_epoch.py
 next_epoch=$?
 last_epoch=$((next_epoch-1))
@@ -74,8 +77,6 @@ fi
 
 # 22
 if [ $next_epoch -lt 23 ]; then
-    end_log=${ChekPointPath}/__shell_end.log
-    if [ ! -d $end_log ]; then
     python3 train.py \
         --model-variant mobilenetv3 \
         --dataset videomatte \
@@ -93,13 +94,38 @@ if [ $next_epoch -lt 23 ]; then
         --log-dir ${ChekPointPath}/log/stage3 \
         --epoch-start $next_epoch \
         --epoch-end 23
-        if [ $? -ne 0 ]; then
-            echo "stage 3 train error"
-            exit -1
-        fi
-
-        echo "$?" >> ${end_log}
+    if [ $? -ne 0 ]; then
+        echo "stage 3 train error"
+        exit -1
     fi
     next_epoch=23
     check_point=${ChekPointPath}"checkpoint/stage3/epoch-22.pth"
+fi
+
+# 23-27
+if [ $next_epoch -lt 24 ]; then
+    if [ ! -d $end_log ]; then
+        python3 train.py \
+            --model-variant mobilenetv3 \
+            --dataset imagematte \
+            --train-hr \
+            --resolution-lr 512 \
+            --resolution-hr 2048 \
+            --seq-length-lr 40 \
+            --seq-length-hr 6 \
+            --learning-rate-backbone 0.00001 \
+            --learning-rate-aspp 0.00001 \
+            --learning-rate-decoder 0.00005 \
+            --learning-rate-refiner 0.0002 \
+            --checkpoint ${check_point} \
+            --checkpoint-dir ${ChekPointPath}checkpoint/stage4 \
+            --log-dir ${ChekPointPath}log/stage4 \
+            --epoch-start $next_epoch \
+            --epoch-end 28
+        if [ $? -ne 0 ]; then
+            echo "stage 4 train error"
+            exit -1
+        fi
+    fi
+    echo "$?" >> ${end_log}
 fi
