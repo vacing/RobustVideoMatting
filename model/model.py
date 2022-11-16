@@ -64,7 +64,9 @@ class MattingNetwork(nn.Module):
             return [fgr, pha, *rec]
         else:
             seg = self.project_seg(hid)
-            return [seg, *rec]
+            seg = F.interpolate(seg, src.shape[2:], mode="bilinear", align_corners=False)
+            seg = seg.sigmoid()
+            return [src, seg, *rec]
 
     def _interpolate(self, x: Tensor, scale_factor: float):
         if x.ndim == 5:
