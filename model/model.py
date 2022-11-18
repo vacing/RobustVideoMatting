@@ -40,11 +40,13 @@ class MattingNetwork(nn.Module):
             self.refiner = FastGuidedFilterRefiner()
         
     def forward(self, src, r1, r2, r3, r4,
-                downsample_ratio: float = 1,
-                segmentation_pass: bool = False):
+                downsample_ratio: float = 0.25,
+                segmentation_pass: bool = True):
         
         if torch.onnx.is_in_onnx_export():
+            # 导出静态模型，不需要自定义该算子
             src_sm = CustomOnnxResizeByFactorOp.apply(src, downsample_ratio)
+            # src_sm = self._interpolate(src, scale_factor=downsample_ratio)
         elif downsample_ratio != 1:
             src_sm = self._interpolate(src, scale_factor=downsample_ratio)
         else:

@@ -42,36 +42,44 @@ class Exporter:
         self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device)["model_state"], strict=False)
         
     def export(self):
-        rec = (torch.zeros([1, 1, 1, 1]).to(self.args.device, self.precision),) * 4
         src = torch.randn(1, 3, 640, 720).to(self.args.device, self.precision)
+        r1i = torch.randn(1, 16, 80, 90).to(self.args.device, self.precision)
+        r2i = torch.randn(1, 20, 40, 45).to(self.args.device, self.precision)
+        r3i = torch.randn(1, 40, 20, 23).to(self.args.device, self.precision)
+        r4i = torch.randn(1, 64, 10, 12).to(self.args.device, self.precision)
         downsample_ratio = torch.tensor([0.25]).to(self.args.device)
         
-        dynamic_spatial = {0: 'batch_size', 2: 'height', 3: 'width'}
-        dynamic_everything = {0: 'batch_size', 1: 'channels', 2: 'height', 3: 'width'}
+        dynamic_spatial =       {0: 'batch_size', 2: 'height', 3: 'width'}
+        dynamic_everything =    {0: 'batch_size', 1: 'channels', 2: 'height', 3: 'width'}
+        dynamic_axes={
+            'src': dynamic_spatial,
+            'fgr': dynamic_spatial,
+            'res': dynamic_spatial,
+            'r1i': dynamic_everything,
+            'r2i': dynamic_everything,
+            'r3i': dynamic_everything,
+            'r4i': dynamic_everything,
+            'r1o': dynamic_spatial,
+            'r2o': dynamic_spatial,
+            'r3o': dynamic_spatial,
+            'r4o': dynamic_spatial,
+            }
+        # fix size
+        dynamic_axes={}
         
         print("seg", self.args.seg)
         torch.onnx.export(
-            self.model,
-            (src, *rec, downsample_ratio, self.args.seg),
-            self.args.output,
+            model=self.model,
+            args=(src, r1i, r2i ,r3i, r4i, downsample_ratio, self.args.seg),
+            f=self.args.output,
             export_params=True,
+            verbose=False,
             opset_version=self.args.opset,
             do_constant_folding=True,
             input_names=['src', 'r1i', 'r2i', 'r3i', 'r4i', 'downsample_ratio'],
             output_names=['fgr', 'res', 'r1o', 'r2o', 'r3o', 'r4o'],
-            dynamic_axes={
-                'src': dynamic_spatial,
-                'fgr': dynamic_spatial,
-                'res': dynamic_spatial,
-                'r1i': dynamic_everything,
-                'r2i': dynamic_everything,
-                'r3i': dynamic_everything,
-                'r4i': dynamic_everything,
-                'r1o': dynamic_spatial,
-                'r2o': dynamic_spatial,
-                'r3o': dynamic_spatial,
-                'r4o': dynamic_spatial,
-            })
+            dynamic_axes=dynamic_axes,
+            )
 
 if __name__ == '__main__':
     Exporter()
