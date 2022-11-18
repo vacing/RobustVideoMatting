@@ -1,3 +1,5 @@
+
+cp=/apdcephfs_cq2/share_1630463/portrait_matting_cache_1118/checkpoint/stage3/epoch-27.pth
 python export_onnx.py \
     --model-variant mobilenetv3 \
     --seg 1 \
@@ -5,6 +7,6 @@ python export_onnx.py \
     --opset 12 \
     --device cuda \
     --output model_seg.onnx \
-    --checkpoint $1 && \
+    --checkpoint $cp && \
 onnxsim model_seg.onnx model_seg_sim.onnx && \
 echo "export success"
