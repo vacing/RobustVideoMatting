@@ -26,7 +26,7 @@ class Exporter:
         
     def parse_args(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument('--model-variant', type=str, required=True, choices=['mobilenetv3', 'resnet50'])
+        parser.add_argument('--model-variant', type=str, required=True, choices=['mobilenetv3', 'mobilenetv3_small', 'resnet50'])
         parser.add_argument('--model-refiner', type=str, default='deep_guided_filter', choices=['deep_guided_filter', 'fast_guided_filter'])
         parser.add_argument('--seg', type=bool, required=False, default=False)
         parser.add_argument('--precision', type=str, required=True, choices=['float16', 'float32'])
@@ -42,12 +42,14 @@ class Exporter:
         self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device)["model_state"], strict=False)
         
     def export(self):
-        src = torch.randn(1, 3, 640, 720).to(self.args.device, self.precision)
+        # downsample_ratio = torch.tensor([0.25]).to(self.args.device)
+        # src = torch.randn(1, 3, 640, 720).to(self.args.device, self.precision)
+        downsample_ratio = torch.tensor([1]).to(self.args.device)
+        src = torch.randn(1, 3, 160, 180).to(self.args.device, self.precision)
         r1i = torch.randn(1, 16, 80, 90).to(self.args.device, self.precision)
         r2i = torch.randn(1, 20, 40, 45).to(self.args.device, self.precision)
         r3i = torch.randn(1, 40, 20, 23).to(self.args.device, self.precision)
         r4i = torch.randn(1, 64, 10, 12).to(self.args.device, self.precision)
-        downsample_ratio = torch.tensor([0.25]).to(self.args.device)
         
         dynamic_spatial =       {0: 'batch_size', 2: 'height', 3: 'width'}
         dynamic_everything =    {0: 'batch_size', 1: 'channels', 2: 'height', 3: 'width'}
@@ -77,7 +79,7 @@ class Exporter:
             opset_version=self.args.opset,
             do_constant_folding=True,
             input_names=['src', 'r1i', 'r2i', 'r3i', 'r4i', 'downsample_ratio'],
-            output_names=['fgr', 'res', 'r1o', 'r2o', 'r3o', 'r4o'],
+            output_names=['res', 'r1o', 'r2o', 'r3o', 'r4o'],
             dynamic_axes=dynamic_axes,
             )
 

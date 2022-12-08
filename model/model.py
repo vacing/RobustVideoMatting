@@ -5,6 +5,7 @@ from torch.nn import functional as F
 from typing import Optional, List
 
 from .mobilenetv3 import MobileNetV3LargeEncoder
+from .mobilenetv3 import MobileNetV3SmallEncoder
 from .resnet import ResNet50Encoder
 from .lraspp import LRASPP
 from .decoder import RecurrentDecoder, Projection
@@ -19,20 +20,28 @@ class MattingNetwork(nn.Module):
                  refiner: str = 'deep_guided_filter',
                  pretrained_backbone: bool = False):
         super().__init__()
-        assert variant in ['mobilenetv3', 'resnet50']
+        assert variant in ['mobilenetv3', 'mobilenetv3_small', 'resnet50']
         assert refiner in ['fast_guided_filter', 'deep_guided_filter']
         
         if variant == 'mobilenetv3':
             self.backbone = MobileNetV3LargeEncoder(pretrained_backbone)
             self.aspp = LRASPP(960, 128)
             self.decoder = RecurrentDecoder([16, 24, 40, 128], [80, 40, 32, 16])
+        if variant == 'mobilenetv3_small':
+            self.backbone = MobileNetV3SmallEncoder(pretrained_backbone)
+            self.aspp = LRASPP(576, 64)
+            self.decoder = RecurrentDecoder([16, 16, 24, 64], [40, 20, 16, 8])
         else:
             self.backbone = ResNet50Encoder(pretrained_backbone)
             self.aspp = LRASPP(2048, 256)
             self.decoder = RecurrentDecoder([64, 256, 512, 256], [128, 64, 32, 16])
             
-        self.project_mat = Projection(16, 4)
-        self.project_seg = Projection(16, 1)
+        if variant == 'mobilenetv3_small':
+            self.project_mat = Projection(8, 4)
+            self.project_seg = Projection(8, 1)
+        else:
+            self.project_mat = Projection(16, 4)
+            self.project_seg = Projection(16, 1)
 
         if refiner == 'deep_guided_filter':
             self.refiner = DeepGuidedFilterRefiner()
@@ -45,8 +54,9 @@ class MattingNetwork(nn.Module):
         
         if torch.onnx.is_in_onnx_export():
             # 导出静态模型，不需要自定义该算子
-            src_sm = CustomOnnxResizeByFactorOp.apply(src, downsample_ratio)
+            # src_sm = CustomOnnxResizeByFactorOp.apply(src, downsample_ratio)
             # src_sm = self._interpolate(src, scale_factor=downsample_ratio)
+            src_sm = src
         elif downsample_ratio != 1:
             src_sm = self._interpolate(src, scale_factor=downsample_ratio)
         else:
@@ -63,12 +73,13 @@ class MattingNetwork(nn.Module):
             fgr = fgr_residual + src
             fgr = fgr.clamp(0., 1.)
             pha = pha.clamp(0., 1.)
-            return [fgr, pha, *rec]
+            return [pha, *rec]
         else:
             seg = self.project_seg(hid)
-            seg = F.interpolate(seg, src.shape[2:], mode="bilinear", align_corners=False)
+            if not torch.onnx.is_in_onnx_export():
+                seg = F.interpolate(seg, src.shape[2:], mode="bilinear", align_corners=False)
             seg = seg.sigmoid()
-            return [src, seg, *rec]
+            return [seg, *rec]
 
     def _interpolate(self, x: Tensor, scale_factor: float):
         if x.ndim == 5:
