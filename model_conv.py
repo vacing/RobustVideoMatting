@@ -134,6 +134,13 @@ def process_quant(model):
     for info in graph_def.value_info:
         tensor_in[info.name] = info
 
+    static_ins = {
+        "r4i": [1, 64, 10, 12],
+        "r3i": [1, 40, 20, 23],
+        "r2i": [1, 20, 40, 45],
+        "r1i": [1, 16, 80, 90],
+    }
+
     # Modify initializer
     value_info = graph_def.value_info
     new_infos = []
@@ -148,55 +155,15 @@ def process_quant(model):
         in_name = quant_in_out[info.name]
         in_tensor = tensor_in[in_name]
         shape = []
-        for dim in in_tensor.type.tensor_type.shape.dim:
-            shape.append(dim.dim_value)
+        if in_tensor.name in static_ins.keys():
+            shape = static_ins[in_tensor.name]
+        else:
+            for dim in in_tensor.type.tensor_type.shape.dim:
+                shape.append(dim.dim_value)
         
         if info.name in ["PPQ_Variable_1401"]:
             print("shape", shape)
-        info2 = helper.make_tensor_value_info(info.name, 2, shape=shape)
-
-        rm_infos.append(info)
-        new_infos.append(info2)
-
-    for info in rm_infos:
-        value_info.remove(info)
-    for info in new_infos:
-        value_info.append(info)
-
-    print("-" * 60)
-    for info in graph_def.value_info:
-        if info.name in ["PPQ_Variable_1401"]:
-            print(info)
-    
-    return model
-
-def process_input(model):
-    quant_outs = []
-    quant_in_out = {}
-    # Modify nodes
-    graph_def = model.graph
-    nodes = graph_def.node
-
-    static_ins = {
-        "r4i": [1, 64, 10, 12],
-        "r3i": [1, 40, 20, 23],
-        "r2i": [1, 20, 40, 45],
-        "r1i": [1, 16, 80, 90],
-    }
-
-    # Modify initializer
-    value_info = graph_def.value_info
-    new_infos = []
-    rm_infos = []
-    for info in graph_def.value_info:
-        if info.name not in static_ins.keys():
-            continue
-
-        shape = static_ins[info.name]
-        if info.name in ["r1i"]:
-            print("shape", shape)
-            print(info)
-        info2 = helper.make_tensor_value_info(info.name, 2, shape=shape)
+        info2 = helper.make_tensor_value_info(info.name, onnx.TensorProto.INT8, shape=shape)
 
         rm_infos.append(info)
         new_infos.append(info2)
@@ -219,8 +186,6 @@ if __name__ == "__main__":
     # print(model)
     # onnx.checker.check_model(model)
     for i in range(3):
-        model = process_input(model)
-        print("*" * 120)
         model = process_quant(model)
         print("*" * 120)
         model = process_dequant(model)
