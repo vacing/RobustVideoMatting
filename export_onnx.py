@@ -14,6 +14,7 @@ Note:
 
 import argparse
 import torch
+import math
 
 from model import MattingNetwork
 
@@ -45,11 +46,18 @@ class Exporter:
         # downsample_ratio = torch.tensor([0.25]).to(self.args.device)
         # src = torch.randn(1, 3, 640, 720).to(self.args.device, self.precision)
         downsample_ratio = torch.tensor([1]).to(self.args.device)
-        src = torch.randn(1, 3, 160, 180).to(self.args.device, self.precision)
-        r1i = torch.randn(1, 16, 80, 90).to(self.args.device, self.precision)
-        r2i = torch.randn(1, 20, 40, 45).to(self.args.device, self.precision)
-        r3i = torch.randn(1, 40, 20, 23).to(self.args.device, self.precision)
-        r4i = torch.randn(1, 64, 10, 12).to(self.args.device, self.precision)
+        sim_ratio = 0.5
+        down_ratio = 0.25
+        src_size = [1, 3, math.ceil(640*down_ratio), math.ceil(720*down_ratio)]
+        r1_size = [1, math.ceil(16 * sim_ratio), math.ceil(src_size[2] / 2), math.ceil(src_size[3] / 2)]
+        r2_size = [1, math.ceil(20 * sim_ratio), math.ceil(r1_size[2] / 2), math.ceil(r1_size[3] / 2)]
+        r3_size = [1, math.ceil(40 * sim_ratio), math.ceil(r2_size[2] / 2), math.ceil(r2_size[3] / 2)]
+        r4_size = [1, math.ceil(64 * sim_ratio), math.ceil(r3_size[2] / 2), math.ceil(r3_size[3] / 2)]
+        src = torch.randn(*src_size).to(self.args.device, self.precision)
+        r1i = torch.randn(*r1_size).to(self.args.device, self.precision)
+        r2i = torch.randn(*r2_size).to(self.args.device, self.precision)
+        r3i = torch.randn(*r3_size).to(self.args.device, self.precision)
+        r4i = torch.randn(*r4_size).to(self.args.device, self.precision)
         
         dynamic_spatial =       {0: 'batch_size', 2: 'height', 3: 'width'}
         dynamic_everything =    {0: 'batch_size', 1: 'channels', 2: 'height', 3: 'width'}

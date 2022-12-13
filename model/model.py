@@ -23,25 +23,24 @@ class MattingNetwork(nn.Module):
         assert variant in ['mobilenetv3', 'mobilenetv3_small', 'resnet50']
         assert refiner in ['fast_guided_filter', 'deep_guided_filter']
         
+        sim_ratio = 0.5
+        lraspp_out = int(sim_ratio * 128)
+        dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
         if variant == 'mobilenetv3':
             self.backbone = MobileNetV3LargeEncoder(pretrained_backbone)
-            self.aspp = LRASPP(960, 128)
-            self.decoder = RecurrentDecoder([16, 24, 40, 128], [80, 40, 32, 16])
-        if variant == 'mobilenetv3_small':
+            self.aspp = LRASPP(960, lraspp_out)
+            self.decoder = RecurrentDecoder([16, 24, 40, lraspp_out], dec_out)
+        elif variant == 'mobilenetv3_small':
             self.backbone = MobileNetV3SmallEncoder(pretrained_backbone)
-            self.aspp = LRASPP(576, 64)
-            self.decoder = RecurrentDecoder([16, 16, 24, 64], [40, 20, 16, 8])
+            self.aspp = LRASPP(576, lraspp_out)
+            self.decoder = RecurrentDecoder([16, 16, 24, lraspp_out], dec_out)
         else:
             self.backbone = ResNet50Encoder(pretrained_backbone)
             self.aspp = LRASPP(2048, 256)
             self.decoder = RecurrentDecoder([64, 256, 512, 256], [128, 64, 32, 16])
             
-        if variant == 'mobilenetv3_small':
-            self.project_mat = Projection(8, 4)
-            self.project_seg = Projection(8, 1)
-        else:
-            self.project_mat = Projection(16, 4)
-            self.project_seg = Projection(16, 1)
+        self.project_mat = Projection(dec_out[3], 4)
+        self.project_seg = Projection(dec_out[3], 1)
 
         if refiner == 'deep_guided_filter':
             self.refiner = DeepGuidedFilterRefiner()

@@ -83,6 +83,7 @@ def infer_rvm_video(weight: str = "rvm_mobilenetv3_720x1280.onnx",
     print(f"Create Video Writer: {output_path}")
 
     i = 0
+    # HxW -> 640x720, 0.25 downsample
     r1i = np.zeros((1, 16, 80, 90), dtype=np.float32)
     r2i = np.zeros((1, 20, 40, 45), dtype=np.float32)
     r3i = np.zeros((1, 40, 20, 23), dtype=np.float32)
