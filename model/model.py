@@ -23,7 +23,7 @@ class MattingNetwork(nn.Module):
         assert variant in ['mobilenetv3', 'mobilenetv3_small', 'resnet50']
         assert refiner in ['fast_guided_filter', 'deep_guided_filter']
         
-        sim_ratio = 0.5
+        sim_ratio = 1
         lraspp_out = int(sim_ratio * 128)
         dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
         if variant == 'mobilenetv3':

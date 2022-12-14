@@ -1,3 +1,4 @@
+import math
 import cv2
 import time
 import argparse
@@ -83,11 +84,18 @@ def infer_rvm_video(weight: str = "rvm_mobilenetv3_720x1280.onnx",
     print(f"Create Video Writer: {output_path}")
 
     i = 0
-    # HxW -> 640x720, 0.25 downsample
-    r1i = np.zeros((1, 16, 80, 90), dtype=np.float32)
-    r2i = np.zeros((1, 20, 40, 45), dtype=np.float32)
-    r3i = np.zeros((1, 40, 20, 23), dtype=np.float32)
-    r4i = np.zeros((1, 64, 10, 12), dtype=np.float32)
+    # HxW -> 720x640, 0.25 downsample
+    sim_ratio = 1
+    down_ratio = 0.5
+    src_size = [1, 3, math.ceil(640*down_ratio), math.ceil(720*down_ratio)]
+    r1_size = [1, math.ceil(16 * sim_ratio), math.ceil(src_size[2] / 2), math.ceil(src_size[3] / 2)]
+    r2_size = [1, math.ceil(20 * sim_ratio), math.ceil(r1_size[2] / 2), math.ceil(r1_size[3] / 2)]
+    r3_size = [1, math.ceil(40 * sim_ratio), math.ceil(r2_size[2] / 2), math.ceil(r2_size[3] / 2)]
+    r4_size = [1, math.ceil(64 * sim_ratio), math.ceil(r3_size[2] / 2), math.ceil(r3_size[3] / 2)]
+    r1i = np.zeros(r1_size, dtype=np.float32)
+    r2i = np.zeros(r2_size, dtype=np.float32)
+    r3i = np.zeros(r3_size, dtype=np.float32)
+    r4i = np.zeros(r4_size, dtype=np.float32)
     bgr = np.array([0.14, 0.5, 0.14]).reshape((3, 1, 1))
     dratio = np.array([0.25], dtype=np.float32)
 
@@ -98,17 +106,16 @@ def infer_rvm_video(weight: str = "rvm_mobilenetv3_720x1280.onnx",
         if success:
             i += 1
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = cv2.resize(frame, (720, 640))  # (w, h)
+            frame = cv2.resize(frame, (src_size[3], src_size[2]))  # (w, h)
             src = normalize(frame)
             # src 张量是 [B, C, H, W] 形状，必须用模型一样的 dtype
             t1 = time.time()
-            fgr, pha, r1o, r2o, r3o, r4o = sess.run([], {
+            pha, r1o, r2o, r3o, r4o = sess.run(["res", "r1o", "r2o", "r3o", "r4o"], {
                 'src': src,
                 'r1i': r1i,
                 'r2i': r2i,
                 'r3i': r3i,
                 'r4i': r4i,
-                'downsample_ratio': dratio,
             })
             # 更新context
             r1i = r1o
@@ -118,7 +125,7 @@ def infer_rvm_video(weight: str = "rvm_mobilenetv3_720x1280.onnx",
 
             t2 = time.time()
             print(f"Infer {i}/{frame_count} done! -> cost {(t2 - t1) * 1000} ms", end=" ")
-            merge_frame = fgr * pha + bgr * (1. - pha)  # (1,3,H,W)
+            merge_frame = src * pha + bgr * (1. - pha)  # (1,3,H,W)
             merge_frame = merge_frame[0] * 255.  # (3,H,W)
             merge_frame = merge_frame.astype(np.uint8)  # RGB
             merge_frame = np.transpose(merge_frame, (1, 2, 0))  # (H,W,3)
@@ -141,14 +148,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--mode", type=str, default="video")
     parser.add_argument("--weight", type=str, default="rvm_mobilenetv3_720x1280.onnx")
-    parser.add_argument("--input", type=str, default="./demo/1917.mp4")
-    parser.add_argument("--output", type=str, default="./demo/1917_onnx.mp4")
+    parser.add_argument("--input", type=str, default="/data/home/vacingfang/video/meeting_02_720x640.mp4")
+    parser.add_argument("--output", type=str, default="m02_onnx.mp4")
     args = parser.parse_args()
 
+    weight = args.weight
+    weight = "/data/home/vacingfang/WebInfTest/ort_web/convnets_small_s1_d0.25.onnx "
+    weight = "model_seg_sim.onnx"
     if args.mode == "video":
-        infer_rvm_video(weight=args.weight, video_path=args.input, output_path=args.output)
+        infer_rvm_video(weight=weight, video_path=args.input, output_path=args.output)
     else:
-        infer_rvm_frame(weight=args.weight, img_path=args.input, output_path=args.output)
+        infer_rvm_frame(weight=weight, img_path=args.input, output_path=args.output)
 
     """
     
