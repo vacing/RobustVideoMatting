@@ -4,8 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 from typing import Optional, List
 
-from .mobilenetv3 import MobileNetV3LargeEncoder
-from .mobilenetv3 import MobileNetV3SmallEncoder
+from .mobilenetv3 import MobileNetV3LargeEncoder, MobileNetV3SmallEncoder, MobileNetV3SimEncoder
 from .resnet import ResNet50Encoder
 from .lraspp import LRASPP
 from .decoder import RecurrentDecoder, Projection
@@ -20,12 +19,15 @@ class MattingNetwork(nn.Module):
                  refiner: str = 'deep_guided_filter',
                  pretrained_backbone: bool = False):
         super().__init__()
-        assert variant in ['mobilenetv3', 'mobilenetv3_small', 'resnet50']
+        assert variant in ['mobilenetv3', 'mobilenetv3_small', 'mobilenetv3_sim', 'resnet50']
         assert refiner in ['fast_guided_filter', 'deep_guided_filter']
         
         sim_ratio = 1
         lraspp_out = int(sim_ratio * 128)
-        dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
+        if variant == 'mobilenetv3_sim':
+            dec_out = [int(sim_ratio * v) for v in [32, 24, 16, 16]]
+        else:
+            dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
         if variant == 'mobilenetv3':
             self.backbone = MobileNetV3LargeEncoder(pretrained_backbone)
             self.aspp = LRASPP(960, lraspp_out)
@@ -33,6 +35,10 @@ class MattingNetwork(nn.Module):
         elif variant == 'mobilenetv3_small':
             self.backbone = MobileNetV3SmallEncoder(pretrained_backbone)
             self.aspp = LRASPP(576, lraspp_out)
+            self.decoder = RecurrentDecoder([16, 16, 24, lraspp_out], dec_out)
+        elif variant == 'mobilenetv3_sim':
+            self.backbone = MobileNetV3SimEncoder(False)
+            self.aspp = LRASPP(32, lraspp_out)
             self.decoder = RecurrentDecoder([16, 16, 24, lraspp_out], dec_out)
         else:
             self.backbone = ResNet50Encoder(pretrained_backbone)

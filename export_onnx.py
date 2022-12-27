@@ -27,7 +27,8 @@ class Exporter:
         
     def parse_args(self):
         parser = argparse.ArgumentParser()
-        parser.add_argument('--model-variant', type=str, required=True, choices=['mobilenetv3', 'mobilenetv3_small', 'resnet50'])
+        parser.add_argument('--model-variant', type=str, required=True,
+                            choices=['mobilenetv3', 'mobilenetv3_small', 'mobilenetv3_sim', 'resnet50'])
         parser.add_argument('--model-refiner', type=str, default='deep_guided_filter', choices=['deep_guided_filter', 'fast_guided_filter'])
         parser.add_argument('--seg', type=bool, required=False, default=False)
         parser.add_argument('--precision', type=str, required=True, choices=['float16', 'float32'])
@@ -46,13 +47,16 @@ class Exporter:
         # downsample_ratio = torch.tensor([0.25]).to(self.args.device)
         # src = torch.randn(1, 3, 640, 720).to(self.args.device, self.precision)
         downsample_ratio = torch.tensor([1]).to(self.args.device)
-        sim_ratio = 0.5
-        down_ratio = 0.25
-        src_size = [1, 3, math.ceil(640*down_ratio), math.ceil(720*down_ratio)]
-        r1_size = [1, math.ceil(16 * sim_ratio), math.ceil(src_size[2] / 2), math.ceil(src_size[3] / 2)]
-        r2_size = [1, math.ceil(20 * sim_ratio), math.ceil(r1_size[2] / 2), math.ceil(r1_size[3] / 2)]
-        r3_size = [1, math.ceil(40 * sim_ratio), math.ceil(r2_size[2] / 2), math.ceil(r2_size[3] / 2)]
-        r4_size = [1, math.ceil(64 * sim_ratio), math.ceil(r3_size[2] / 2), math.ceil(r3_size[3] / 2)]
+        sim_ratio = 1
+        down_ratio = 0.5
+        src_size = [1, 3, math.ceil(512*down_ratio), math.ceil(512*down_ratio)]
+        dec_in = [0, 16, 20, 40, 64]
+        if self.args.model_variant == "mobilenetv3_sim":
+            dec_in = [0, 8, 12, 16, 64]
+        r1_size = [1, math.ceil(dec_in[1] * sim_ratio), math.ceil(src_size[2] / 2), math.ceil(src_size[3] / 2)]
+        r2_size = [1, math.ceil(dec_in[2] * sim_ratio), math.ceil(r1_size[2] / 2), math.ceil(r1_size[3] / 2)]
+        r3_size = [1, math.ceil(dec_in[3] * sim_ratio), math.ceil(r2_size[2] / 2), math.ceil(r2_size[3] / 2)]
+        r4_size = [1, math.ceil(dec_in[4] * sim_ratio), math.ceil(r3_size[2] / 2), math.ceil(r3_size[3] / 2)]
         src = torch.randn(*src_size).to(self.args.device, self.precision)
         r1i = torch.randn(*r1_size).to(self.args.device, self.precision)
         r2i = torch.randn(*r2_size).to(self.args.device, self.precision)
