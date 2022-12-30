@@ -25,7 +25,7 @@ class MattingNetwork(nn.Module):
         sim_ratio = 1
         lraspp_out = int(sim_ratio * 128)
         if variant == 'mobilenetv3_sim':
-            dec_out = [int(sim_ratio * v) for v in [32, 24, 16, 16]]
+            dec_out = [int(sim_ratio * v) for v in [24, 16, 16, 4]]
         else:
             dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
         if variant == 'mobilenetv3':
