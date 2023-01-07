@@ -7,7 +7,7 @@ from typing import Optional, List
 from .mobilenetv3 import MobileNetV3LargeEncoder, MobileNetV3SmallEncoder, MobileNetV3SimEncoder
 from .resnet import ResNet50Encoder
 from .lraspp import LRASPP
-from .decoder import RecurrentDecoder, Projection
+from .decoder_gg import RecurrentDecoder, Projection
 from .fast_guided_filter import FastGuidedFilterRefiner
 from .deep_guided_filter import DeepGuidedFilterRefiner
 
