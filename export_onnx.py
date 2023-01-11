@@ -28,7 +28,7 @@ class Exporter:
     def parse_args(self):
         parser = argparse.ArgumentParser()
         parser.add_argument('--model-variant', type=str, required=True,
-                            choices=['mobilenetv3', 'mobilenetv3_small', 'mobilenetv3_sim', 'resnet50'])
+                            choices=['mobilenetv3', 'mobilenetv3_small', 'mobilenetv3_smaller', 'mobilenetv3_sim', 'resnet50'])
         parser.add_argument('--refiner', type=str, default='deep_guided_filter', choices=['deep_guided_filter', 'fast_guided_filter'])
         parser.add_argument('--seg', type=bool, required=False, default=False)
         parser.add_argument('--precision', type=str, required=True, choices=['float16', 'float32'])

@@ -48,7 +48,7 @@ class InvertedResidualConfig:
     def adjust_channels(channels: int, width_mult: float):
         return _make_divisible(channels * width_mult, 8)
 
-
+ForceExpand = True
 class InvertedResidual(nn.Module):
     # Implemented as described at section 5 of MobileNetV3 paper
     def __init__(self, cnf: InvertedResidualConfig, norm_layer: Callable[..., nn.Module],
@@ -63,7 +63,7 @@ class InvertedResidual(nn.Module):
         activation_layer = nn.Hardswish if cnf.use_hs else nn.ReLU
 
         # expand
-        if True or cnf.expanded_channels != cnf.input_channels:
+        if ForceExpand or cnf.expanded_channels != cnf.input_channels:
             layers.append(ConvBNActivation(cnf.input_channels, cnf.expanded_channels, kernel_size=1,
                                            norm_layer=norm_layer, activation_layer=activation_layer))
 
@@ -178,6 +178,8 @@ class MobileNetV3(nn.Module):
 
 class MobileNetV3LargeEncoder(MobileNetV3):
     def __init__(self, pretrained: bool = False):
+        global ForceExpand
+        ForceExpand = not pretrained
         super().__init__(
             inverted_residual_setting=[
                 InvertedResidualConfig( 16, 3,  16,  16, False, "RE", 1, 1, 1),
@@ -248,6 +250,8 @@ class MobileNetV3LargeEncoder(MobileNetV3):
 
 class MobileNetV3SmallEncoder(MobileNetV3):
     def __init__(self, pretrained: bool = False):
+        global ForceExpand
+        ForceExpand = not pretrained
         super().__init__(
             inverted_residual_setting=[
                 # f1
@@ -294,6 +298,70 @@ class MobileNetV3SmallEncoder(MobileNetV3):
         x = self.features[11](x)
 
         x = self.features[12](x)
+        f4 = x
+        return [f1, f2, f3, f4]
+    
+    def forward_time_series(self, x):
+        B, T = x.shape[:2]
+        features = self.forward_single_frame(x.flatten(0, 1))
+        features = [f.unflatten(0, (B, T)) for f in features]
+        return features
+
+    def forward(self, x):
+        if x.ndim == 5:
+            return self.forward_time_series(x)
+        else:
+            return self.forward_single_frame(x)
+
+class MobileNetV3SmallEncoder(MobileNetV3):
+    def __init__(self, pretrained: bool = False):
+        global ForceExpand
+        ForceExpand = not pretrained
+        super().__init__(
+            inverted_residual_setting=[
+                # f1
+                InvertedResidualConfig( 16, 3,  16,  16, True,  "RE", 2, 1, 1), # C1, f2
+                InvertedResidualConfig( 16, 3,  72,  24, False, "RE", 2, 1, 1), # C2
+                InvertedResidualConfig( 24, 3,  88,  24, False, "RE", 1, 1, 1), # f3
+                InvertedResidualConfig( 24, 5,  96,  40,  True, "HS", 2, 1, 1), # C3
+                InvertedResidualConfig( 40, 5, 240,  40,  True, "HS", 1, 1, 1),
+                InvertedResidualConfig( 40, 5, 240,  40,  True, "HS", 1, 1, 1),
+                InvertedResidualConfig( 40, 5, 120,  48,  True, "HS", 1, 1, 1),
+                InvertedResidualConfig( 48, 5, 144,  48,  True, "HS", 1, 1, 1), # f4
+                InvertedResidualConfig( 48, 5, 288,  96,  True, "HS", 2, 2, 1), # C4
+                InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1),
+                InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1), # f4
+            ],
+            last_channel=1024
+        )
+        
+        if pretrained:
+            self.load_state_dict(torch.hub.load_state_dict_from_url(
+                # "https://download.pytorch.org/models/mobilenet_v3_small-047dcff4.pth"))
+                "https://vacing-1258344699.cos.ap-guangzhou.myqcloud.com/AIData/mobilenet_v3_small-047dcff4.pth"))
+
+        del self.avgpool
+        del self.classifier
+        del self.features[12]
+        del self.features[11]
+        del self.features[10]
+        del self.features[9]
+        
+    def forward_single_frame(self, x):
+        x = normalize(x, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        
+        x = self.features[0](x)
+        f1 = x
+        x = self.features[1](x)
+        f2 = x
+        x = self.features[2](x)
+        x = self.features[3](x)
+        f3 = x
+        x = self.features[4](x)
+        x = self.features[5](x)
+        x = self.features[6](x)
+        x = self.features[7](x)
+        x = self.features[8](x)
         f4 = x
         return [f1, f2, f3, f4]
     
