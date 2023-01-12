@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 from typing import Optional, List
 
-from .mobilenetv3 import MobileNetV3LargeEncoder, MobileNetV3SmallEncoder, MobileNetV3SimEncoder
+from .mobilenetv3 import MobileNetV3LargeEncoder, MobileNetV3SmallEncoder, MobileNetV3SmallerEncoder, MobileNetV3SimEncoder
 from .resnet import ResNet50Encoder
 from .lraspp import LRASPP
 from .decoder import RecurrentDecoder, Projection
@@ -29,7 +29,7 @@ class MattingNetwork(nn.Module):
         else:
             dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
 
-        pretrained_backbone = False
+        pretrained_backbone = True
         if variant == 'mobilenetv3':
             self.backbone = MobileNetV3LargeEncoder(pretrained_backbone)
             self.aspp = LRASPP(960, lraspp_out)
@@ -39,7 +39,7 @@ class MattingNetwork(nn.Module):
             self.aspp = LRASPP(576, lraspp_out)
             self.decoder = RecurrentDecoder([16, 16, 24, lraspp_out], dec_out)
         elif variant == 'mobilenetv3_smaller':
-            self.backbone = MobileNetV3SmallEncoder(pretrained_backbone)
+            self.backbone = MobileNetV3SmallerEncoder(pretrained_backbone)
             self.aspp = LRASPP(48, lraspp_out)
             self.decoder = RecurrentDecoder([16, 16, 24, lraspp_out], dec_out)
         elif variant == 'mobilenetv3_sim':

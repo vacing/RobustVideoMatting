@@ -313,7 +313,7 @@ class MobileNetV3SmallEncoder(MobileNetV3):
         else:
             return self.forward_single_frame(x)
 
-class MobileNetV3SmallEncoder(MobileNetV3):
+class MobileNetV3SmallerEncoder(MobileNetV3):
     def __init__(self, pretrained: bool = False):
         global ForceExpand
         ForceExpand = not pretrained

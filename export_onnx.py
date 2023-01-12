@@ -51,7 +51,7 @@ class Exporter:
         down_ratio = 0.5
         src_size = [1, 3, math.ceil(512*down_ratio), math.ceil(512*down_ratio)]
         dec_in = [0, 16, 20, 40, 64]
-        if self.args.model_variant == "mobilenetv3_sim":
+        if self.args.model_variant in ["mobilenetv3_sim", "mobilenetv3_smaller"]:
             dec_in = [0, 8, 8, 12, 64]
         r1_size = [1, math.ceil(dec_in[1] * sim_ratio), math.ceil(src_size[2] / 2), math.ceil(src_size[3] / 2)]
         r2_size = [1, math.ceil(dec_in[2] * sim_ratio), math.ceil(r1_size[2] / 2), math.ceil(r1_size[3] / 2)]
