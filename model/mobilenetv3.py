@@ -327,8 +327,8 @@ class MobileNetV3SmallerEncoder(MobileNetV3):
                 InvertedResidualConfig( 40, 5, 240,  40,  True, "HS", 1, 1, 1),
                 InvertedResidualConfig( 40, 5, 240,  40,  True, "HS", 1, 1, 1),
                 InvertedResidualConfig( 40, 5, 120,  48,  True, "HS", 1, 1, 1),
-                InvertedResidualConfig( 48, 5, 144,  48,  True, "HS", 1, 1, 1), # f4
-                InvertedResidualConfig( 48, 5, 288,  96,  True, "HS", 2, 2, 1), # C4
+                InvertedResidualConfig( 48, 5, 144,  48,  True, "HS", 1, 1, 1),
+                InvertedResidualConfig( 48, 5, 288,  96,  True, "HS", 2, 2, 1), # C4, f4
                 InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1),
                 InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1), # f4
             ],
@@ -345,7 +345,6 @@ class MobileNetV3SmallerEncoder(MobileNetV3):
         del self.features[12]
         del self.features[11]
         del self.features[10]
-        del self.features[9]
         
     def forward_single_frame(self, x):
         x = normalize(x, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
@@ -362,6 +361,7 @@ class MobileNetV3SmallerEncoder(MobileNetV3):
         x = self.features[6](x)
         x = self.features[7](x)
         x = self.features[8](x)
+        x = self.features[9](x)
         f4 = x
         return [f1, f2, f3, f4]
     

@@ -8,6 +8,8 @@ from .mobilenetv3 import MobileNetV3LargeEncoder, MobileNetV3SmallEncoder, Mobil
 from .resnet import ResNet50Encoder
 from .lraspp import LRASPP
 from .decoder import RecurrentDecoder, Projection
+from .decoder_sim import RecurrentDecoderSim
+from .decoder_gg import RecurrentDecoderGG
 from .fast_guided_filter import FastGuidedFilterRefiner
 from .deep_guided_filter import DeepGuidedFilterRefiner
 
@@ -16,40 +18,50 @@ from .onnx_helper import CustomOnnxResizeByFactorOp
 class MattingNetwork(nn.Module):
     def __init__(self,
                  variant: str = 'mobilenetv3',
+                 decoder: str = 'rvm',
                  refiner: str = 'deep_guided_filter',
                  pretrained_backbone: bool = False):
         super().__init__()
         assert variant in ['mobilenetv3', 'mobilenetv3_small', 'mobilenetv3_smaller', 'mobilenetv3_sim', 'resnet50']
+        assert decoder in ["rvm", "rvm_sim_big", "rvm_sim_small", "gg"]
         assert refiner in ['fast_guided_filter', 'deep_guided_filter']
         
         sim_ratio = 1
         lraspp_out = int(sim_ratio * 128)
-        if variant == 'mobilenetv3_sim' or variant == "mobilenetv3_smaller":
+        Decoder = RecurrentDecoder
+        # rvm_sim_big = rvm_small
+        if decoder in ["rvm_sim_small"]:
+            Decoder = RecurrentDecoderSim
+        elif decoder in ["gg"]:
+            Decoder = RecurrentDecoderGG
+
+        dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
+        if decoder in ["rvm_sim_small", "gg"]:
+            # dec input, 128, 24, 16, 16 -> ri: 64, 12, 8, 8
             dec_out = [int(sim_ratio * v) for v in [24, 16, 16, 4]]
-        else:
-            dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
 
         pretrained_backbone = True
         if variant == 'mobilenetv3':
             self.backbone = MobileNetV3LargeEncoder(pretrained_backbone)
             self.aspp = LRASPP(960, lraspp_out)
-            self.decoder = RecurrentDecoder([16, 24, 40, lraspp_out], dec_out)
+            self.decoder = Decoder([16, 24, 40, lraspp_out], dec_out)
         elif variant == 'mobilenetv3_small':
             self.backbone = MobileNetV3SmallEncoder(pretrained_backbone)
             self.aspp = LRASPP(576, lraspp_out)
-            self.decoder = RecurrentDecoder([16, 16, 24, lraspp_out], dec_out)
+            self.decoder = Decoder([16, 16, 24, lraspp_out], dec_out)
         elif variant == 'mobilenetv3_smaller':
             self.backbone = MobileNetV3SmallerEncoder(pretrained_backbone)
-            self.aspp = LRASPP(48, lraspp_out)
-            self.decoder = RecurrentDecoder([16, 16, 24, lraspp_out], dec_out)
+            self.aspp = LRASPP(96, lraspp_out)
+            self.decoder = Decoder([16, 16, 24, lraspp_out], dec_out)
         elif variant == 'mobilenetv3_sim':
             self.backbone = MobileNetV3SimEncoder(pretrained_backbone)
             self.aspp = LRASPP(32, lraspp_out)
-            self.decoder = RecurrentDecoder([16, 16, 24, lraspp_out], dec_out)
+            self.decoder = Decoder([16, 16, 24, lraspp_out], dec_out)
         else:
+            # resnet50
             self.backbone = ResNet50Encoder(pretrained_backbone)
             self.aspp = LRASPP(2048, 256)
-            self.decoder = RecurrentDecoder([64, 256, 512, 256], [128, 64, 32, 16])
+            self.decoder = Decoder([64, 256, 512, 256], [128, 64, 32, 16])
             
         self.project_mat = Projection(dec_out[3], 4)
         self.project_seg = Projection(dec_out[3], 1)
