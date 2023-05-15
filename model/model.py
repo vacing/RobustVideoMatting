@@ -8,7 +8,7 @@ from .mobilenetv3 import MobileNetV3LargeEncoder, MobileNetV3SmallEncoder, Mobil
 from .resnet import ResNet50Encoder
 from .lraspp import LRASPP
 from .decoder import RecurrentDecoder, Projection
-from .decoder_sim import RecurrentDecoderSim
+from .decoder_sim import RecurrentDecoderSim, ProjectionSim
 from .decoder_gg import RecurrentDecoderGG
 from .fast_guided_filter import FastGuidedFilterRefiner
 from .deep_guided_filter import DeepGuidedFilterRefiner
@@ -23,20 +23,26 @@ class MattingNetwork(nn.Module):
                  pretrained_backbone: bool = False):
         super().__init__()
         assert variant in ['mobilenetv3', 'mobilenetv3_small', 'mobilenetv3_smaller', 'mobilenetv3_sim', 'resnet50']
-        assert decoder in ["rvm", "rvm_sim_big", "rvm_sim_small", "gg"]
+        assert decoder in ["rvm", "rvm_small", "rvm_sim_big", "rvm_sim", "rvm_sim_small", "gg"]
         assert refiner in ['fast_guided_filter', 'deep_guided_filter']
         
         sim_ratio = 1
         lraspp_out = int(sim_ratio * 128)
         Decoder = RecurrentDecoder
+        Project = Projection
         # rvm_sim_big = rvm_small
-        if decoder in ["rvm_sim_small"]:
+        if decoder in ["rvm_sim", "rvm_sim_small"]:
             Decoder = RecurrentDecoderSim
+            Project = ProjectionSim
         elif decoder in ["gg"]:
             Decoder = RecurrentDecoderGG
+            Project = ProjectionSim
 
         dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
-        if decoder in ["rvm_sim_small", "gg"]:
+        if decoder in ["rvm_small", "rvm_sim_small"]:
+            # dec input, 128, 32, 24, 16 -> ri: 64, 16, 12, 8
+            dec_out = [int(sim_ratio * v) for v in [32, 24, 16, 6]]
+        elif decoder in ["gg"]:
             # dec input, 128, 24, 16, 16 -> ri: 64, 12, 8, 8
             dec_out = [int(sim_ratio * v) for v in [24, 16, 16, 4]]
 
@@ -63,8 +69,8 @@ class MattingNetwork(nn.Module):
             self.aspp = LRASPP(2048, 256)
             self.decoder = Decoder([64, 256, 512, 256], [128, 64, 32, 16])
             
-        self.project_mat = Projection(dec_out[3], 4)
-        self.project_seg = Projection(dec_out[3], 1)
+        self.project_mat = Project(dec_out[3], 4)
+        self.project_seg = Project(dec_out[3], 1, kernel=3)
 
         if refiner == 'deep_guided_filter':
             self.refiner = DeepGuidedFilterRefiner()

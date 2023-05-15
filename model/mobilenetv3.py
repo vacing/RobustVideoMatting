@@ -5,7 +5,6 @@ from torch import nn, Tensor
 from torch.nn import functional as F
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from torchvision.models.utils import load_state_dict_from_url
 from torchvision.models.mobilenetv2 import _make_divisible, ConvBNActivation
 from torchvision.transforms.functional import normalize
 
@@ -19,6 +18,7 @@ class SqueezeExcitation(nn.Module):
         self.fc2 = nn.Conv2d(squeeze_channels, input_channels, 1)
 
     def _scale(self, input: Tensor, inplace: bool) -> Tensor:
+        # nn.AvgPool2d(2, 2, count_include_pad=False, ceil_mode=True)
         scale = F.adaptive_avg_pool2d(input, 1)
         scale = self.fc1(scale)
         scale = self.relu(scale)
@@ -60,12 +60,14 @@ class InvertedResidual(nn.Module):
         self.use_res_connect = cnf.stride == 1 and cnf.input_channels == cnf.out_channels
 
         layers: List[nn.Module] = []
+        # hardsigmoid here
         activation_layer = nn.Hardswish if cnf.use_hs else nn.ReLU
 
-        # expand
+        # force expand
         if ForceExpand or cnf.expanded_channels != cnf.input_channels:
+            # print("force=", ForceExpand)
             layers.append(ConvBNActivation(cnf.input_channels, cnf.expanded_channels, kernel_size=1,
-                                           norm_layer=norm_layer, activation_layer=activation_layer))
+                                            norm_layer=norm_layer, activation_layer=activation_layer))
 
         # depthwise
         stride = 1 if cnf.dilation > 1 else cnf.stride
@@ -89,9 +91,7 @@ class InvertedResidual(nn.Module):
             result += input
         return result
 
-
 class MobileNetV3(nn.Module):
-
     def __init__(
             self,
             inverted_residual_setting: List[InvertedResidualConfig],
@@ -176,18 +176,20 @@ class MobileNetV3(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         return self._forward_impl(x)
 
+
+# https://pytorch.org/vision/stable/_modules/torchvision/models/mobilenetv3.html
 class MobileNetV3LargeEncoder(MobileNetV3):
     def __init__(self, pretrained: bool = False):
         global ForceExpand
         ForceExpand = not pretrained
         super().__init__(
             inverted_residual_setting=[
-                InvertedResidualConfig( 16, 3,  16,  16, False, "RE", 1, 1, 1),
+                InvertedResidualConfig( 16, 3,  16,  16, False, "RE", 1, 1, 1),  # f1
                 InvertedResidualConfig( 16, 3,  64,  24, False, "RE", 2, 1, 1),  # C1
-                InvertedResidualConfig( 24, 3,  72,  24, False, "RE", 1, 1, 1),
+                InvertedResidualConfig( 24, 3,  72,  24, False, "RE", 1, 1, 1),  # f2
                 InvertedResidualConfig( 24, 5,  72,  40,  True, "RE", 2, 1, 1),  # C2
                 InvertedResidualConfig( 40, 5, 120,  40,  True, "RE", 1, 1, 1),
-                InvertedResidualConfig( 40, 5, 120,  40,  True, "RE", 1, 1, 1),
+                InvertedResidualConfig( 40, 5, 120,  40,  True, "RE", 1, 1, 1),  # f3
                 InvertedResidualConfig( 40, 3, 240,  80, False, "HS", 2, 1, 1),  # C3
                 InvertedResidualConfig( 80, 3, 200,  80, False, "HS", 1, 1, 1),
                 InvertedResidualConfig( 80, 3, 184,  80, False, "HS", 1, 1, 1),
@@ -196,24 +198,19 @@ class MobileNetV3LargeEncoder(MobileNetV3):
                 InvertedResidualConfig(112, 3, 672, 112,  True, "HS", 1, 1, 1),
                 InvertedResidualConfig(112, 5, 672, 160,  True, "HS", 2, 2, 1),  # C4
                 InvertedResidualConfig(160, 5, 960, 160,  True, "HS", 1, 2, 1),
-                InvertedResidualConfig(160, 5, 960, 160,  True, "HS", 1, 2, 1),
+                InvertedResidualConfig(160, 5, 960, 160,  True, "HS", 1, 2, 1),  # f4
             ],
             last_channel=1280
         )
         
-        if pretrained:
-            self.load_state_dict(load_state_dict_from_url(
-                # 'https://download.pytorch.org/models/mobilenet_v3_large-8738ca79.pth')) # V1, 74/91
-                # 'https://download.pytorch.org/models/mobilenet_v3_large-5c1a4163.pth')) # V2, 75/92
-                "https://vacing-1258344699.cos.ap-guangzhou.myqcloud.com/AIData/mobilenet_v3_large-5c1a4163.pth"))
-
         del self.avgpool
         del self.classifier
         
     def forward_single_frame(self, x):
         x = normalize(x, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         
-        x = self.features[0](x)
+        x = self.features[0](x)     # 第一层不是bneck
+
         x = self.features[1](x)
         f1 = x
         x = self.features[2](x)
@@ -232,7 +229,8 @@ class MobileNetV3LargeEncoder(MobileNetV3):
         x = self.features[13](x)
         x = self.features[14](x)
         x = self.features[15](x)
-        x = self.features[16](x)
+
+        x = self.features[16](x)    # 最后一层不是bneck
         f4 = x
         return [f1, f2, f3, f4]
     
@@ -248,10 +246,19 @@ class MobileNetV3LargeEncoder(MobileNetV3):
         else:
             return self.forward_single_frame(x)
 
+SelfPretrain = False
+SmallPretrainPath = "/apdcephfs_cq2/share_1630463/portrait_matting_data/model/model_best_230317.pth"
+SmallPretrainUrl = "https://vacing-1258344699.cos.ap-guangzhou.myqcloud.com/AIData/mobilenet_v3_small-047dcff4.pth"
 class MobileNetV3SmallEncoder(MobileNetV3):
     def __init__(self, pretrained: bool = False):
+        global SelfPretrain
+        global SmallPretrainPath
         global ForceExpand
-        ForceExpand = not pretrained
+        global SmallPretrainUrl
+        num_classes = 1001
+        if not SelfPretrain:
+            ForceExpand = not pretrained
+            num_classes = 1000
         super().__init__(
             inverted_residual_setting=[
                 # f1
@@ -267,14 +274,10 @@ class MobileNetV3SmallEncoder(MobileNetV3):
                 InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1),
                 InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1), # f4
             ],
-            last_channel=1024
+            last_channel=1024,
+            num_classes=num_classes,
         )
         
-        if pretrained:
-            self.load_state_dict(torch.hub.load_state_dict_from_url(
-                # "https://download.pytorch.org/models/mobilenet_v3_small-047dcff4.pth"))
-                "https://vacing-1258344699.cos.ap-guangzhou.myqcloud.com/AIData/mobilenet_v3_small-047dcff4.pth"))
-
         del self.avgpool
         del self.classifier
         
@@ -315,8 +318,14 @@ class MobileNetV3SmallEncoder(MobileNetV3):
 
 class MobileNetV3SmallerEncoder(MobileNetV3):
     def __init__(self, pretrained: bool = False):
+        global SelfPretrain
+        global SmallPretrainPath
         global ForceExpand
-        ForceExpand = not pretrained
+        global SmallPretrainUrl
+        num_classes = 1001
+        if not SelfPretrain:
+            ForceExpand = not pretrained
+            num_classes = 1000
         super().__init__(
             inverted_residual_setting=[
                 # f1
@@ -330,16 +339,12 @@ class MobileNetV3SmallerEncoder(MobileNetV3):
                 InvertedResidualConfig( 48, 5, 144,  48,  True, "HS", 1, 1, 1),
                 InvertedResidualConfig( 48, 5, 288,  96,  True, "HS", 2, 2, 1), # C4, f4
                 InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1),
-                InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1), # f4
+                InvertedResidualConfig( 96, 5, 576,  96,  True, "HS", 1, 2, 1),
             ],
-            last_channel=1024
+            last_channel=1024,
+            num_classes=num_classes,
         )
         
-        if pretrained:
-            self.load_state_dict(torch.hub.load_state_dict_from_url(
-                # "https://download.pytorch.org/models/mobilenet_v3_small-047dcff4.pth"))
-                "https://vacing-1258344699.cos.ap-guangzhou.myqcloud.com/AIData/mobilenet_v3_small-047dcff4.pth"))
-
         del self.avgpool
         del self.classifier
         del self.features[12]
@@ -362,6 +367,7 @@ class MobileNetV3SmallerEncoder(MobileNetV3):
         x = self.features[7](x)
         x = self.features[8](x)
         x = self.features[9](x)
+        # x = self.features[10](x)
         f4 = x
         return [f1, f2, f3, f4]
     
@@ -379,6 +385,8 @@ class MobileNetV3SmallerEncoder(MobileNetV3):
 
 class MobileNetV3SimEncoder(MobileNetV3):
     def __init__(self, pretrained: bool = False):
+        global SelfPretrain
+        num_classes = 1001
         super().__init__(
             inverted_residual_setting=[
                 # f1
@@ -393,9 +401,9 @@ class MobileNetV3SimEncoder(MobileNetV3):
                 InvertedResidualConfig( 48, 5,  96,  32,  True, "HS", 1, 1, 1),
                 InvertedResidualConfig( 32, 5,  96,  32,  True, "HS", 1, 1, 1), # f4
             ],
-            last_channel=1024
+            last_channel=1024,
+            num_classes=num_classes,
         )
-
         del self.avgpool
         del self.classifier
         

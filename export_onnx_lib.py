@@ -41,7 +41,7 @@ class Exporter:
         self.precision = torch.float32 if self.args.precision == 'float32' else torch.float16
         self.model = MattingNetwork(self.args.model_variant, self.args.model_refiner).eval().to(self.args.device, self.precision)
         if self.args.checkpoint is not None:
-            self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device), strict=False)
+            self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device), strict=True)
         
     def export(self):
         rec = (torch.zeros([1, 1, 1, 1]).to(self.args.device, self.precision),) * 4

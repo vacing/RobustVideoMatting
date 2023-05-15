@@ -30,7 +30,7 @@ class Exporter:
         parser.add_argument('--model-variant', type=str, required=True,
                             choices=['mobilenetv3', 'mobilenetv3_small', 'mobilenetv3_smaller', 'mobilenetv3_sim', 'resnet50'])
         parser.add_argument('--model-decoder', type=str, required=True,
-                            choices=['rvm', 'rvm_sim_big', 'rvm_sim_small', 'gg'])
+                            choices=['rvm', 'rvm_small', 'rvm_sim', 'rvm_sim_small', 'gg'])
         parser.add_argument('--refiner', type=str, default='deep_guided_filter', choices=['deep_guided_filter', 'fast_guided_filter'])
         parser.add_argument('--seg', type=bool, required=False, default=False)
         parser.add_argument('--precision', type=str, required=True, choices=['float16', 'float32'])
@@ -41,20 +41,24 @@ class Exporter:
         self.args = parser.parse_args()
         
     def init_model(self):
+        print(self.args.checkpoint)
         self.precision = torch.float32 if self.args.precision == 'float32' else torch.float16
         self.model = MattingNetwork(self.args.model_variant, decoder=self.args.model_decoder, refiner=self.args.refiner).\
                                     eval().to(self.args.device, self.precision)
-        self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device)["model_state"], strict=False)
+        self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device)["model_state"], strict=True)
         
     def export(self):
         # downsample_ratio = torch.tensor([0.25]).to(self.args.device)
         # src = torch.randn(1, 3, 640, 720).to(self.args.device, self.precision)
         downsample_ratio = torch.tensor([1]).to(self.args.device)
         sim_ratio = 1
-        down_ratio = 0.5
-        src_size = [1, 3, math.ceil(512*down_ratio), math.ceil(512*down_ratio)]
+        iw = 192
+        ih = 192
+        src_size = [1, 3, math.ceil(iw), math.ceil(ih)]
         dec_in = [0, 16, 20, 40, 64]
-        if self.args.model_decoder in ["rvm_sim_small", "gg"]:
+        if self.args.model_decoder in ["rvm_small", "rvm_sim_small"]:
+            dec_in = [0, 8, 12, 16, 64]
+        elif self.args.model_decoder in ["gg"]:
             dec_in = [0, 8, 8, 12, 64]
         r1_size = [1, math.ceil(dec_in[1] * sim_ratio), math.ceil(src_size[2] / 2), math.ceil(src_size[3] / 2)]
         r2_size = [1, math.ceil(dec_in[2] * sim_ratio), math.ceil(r1_size[2] / 2), math.ceil(r1_size[3] / 2)]
