@@ -15,14 +15,13 @@ class RecurrentDecoderGG(nn.Module):
 
     def forward(self,
                 s0: Tensor, f1: Tensor, f2: Tensor, f3: Tensor, f4: Tensor,
-                r1: Optional[Tensor], r2: Optional[Tensor],
-                r3: Optional[Tensor], r4: Optional[Tensor]):
+                r1: Optional[Tensor], r2: Optional[Tensor], r3: Optional[Tensor]):
         s1, s2, s3 = self.avgpool(s0)
         x3 = self.decode3(f4, f3, s3)
         x2 = self.decode2(x3, f2, s2)
         x1 = self.decode1(x2, f1, s1)
         x0 = self.decode0(x1, s0)
-        return x0, r1, r2, r3, r4
+        return x0, r1, r2, r3
     
 
 class AvgPool(nn.Module):

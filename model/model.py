@@ -41,7 +41,7 @@ class MattingNetwork(nn.Module):
         dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
         if decoder in ["rvm_small", "rvm_sim_small"]:
             # dec input, 128, 32, 24, 16 -> ri: 64, 16, 12, 8
-            dec_out = [int(sim_ratio * v) for v in [32, 24, 16, 6]]
+            dec_out = [int(sim_ratio * v) for v in [32, 24, 12, 4]]
         elif decoder in ["gg"]:
             # dec input, 128, 24, 16, 16 -> ri: 64, 12, 8, 8
             dec_out = [int(sim_ratio * v) for v in [24, 16, 16, 4]]
@@ -77,7 +77,7 @@ class MattingNetwork(nn.Module):
         else:
             self.refiner = FastGuidedFilterRefiner()
         
-    def forward(self, src, r1, r2, r3, r4,
+    def forward(self, src, r1, r2, r3, r4 = None,
                 downsample_ratio: float = 0.25,
                 segmentation_pass: bool = True):
         
@@ -93,7 +93,10 @@ class MattingNetwork(nn.Module):
         
         f1, f2, f3, f4 = self.backbone(src_sm)
         f4 = self.aspp(f4)
-        hid, *rec = self.decoder(src_sm, f1, f2, f3, f4, r1, r2, r3, r4)
+        if r4 is not None:
+            hid, *rec = self.decoder(src_sm, f1, f2, f3, f4, r1, r2, r3, r4)
+        else:
+            hid, *rec = self.decoder(src_sm, f1, f2, f3, f4, r1, r2, r3)
         
         if not segmentation_pass:
             fgr_residual, pha = self.project_mat(hid).split([3, 1], dim=-3)

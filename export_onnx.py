@@ -45,7 +45,7 @@ class Exporter:
         self.precision = torch.float32 if self.args.precision == 'float32' else torch.float16
         self.model = MattingNetwork(self.args.model_variant, decoder=self.args.model_decoder, refiner=self.args.refiner).\
                                     eval().to(self.args.device, self.precision)
-        self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device)["model_state"], strict=True)
+        self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device)["model_state"], strict=False)
         
     def export(self):
         # downsample_ratio = torch.tensor([0.25]).to(self.args.device)
@@ -56,9 +56,12 @@ class Exporter:
         ih = 192
         src_size = [1, 3, math.ceil(iw), math.ceil(ih)]
         dec_in = [0, 16, 20, 40, 64]
+        has_r4 = True
         if self.args.model_decoder in ["rvm_small", "rvm_sim_small"]:
-            dec_in = [0, 8, 12, 16, 64]
+            has_r4 = False
+            dec_in = [0, 6, 12, 16, 64]
         elif self.args.model_decoder in ["gg"]:
+            has_r4 = False
             dec_in = [0, 8, 8, 12, 64]
         r1_size = [1, math.ceil(dec_in[1] * sim_ratio), math.ceil(src_size[2] / 2), math.ceil(src_size[3] / 2)]
         r2_size = [1, math.ceil(dec_in[2] * sim_ratio), math.ceil(r1_size[2] / 2), math.ceil(r1_size[3] / 2)]
@@ -87,20 +90,28 @@ class Exporter:
             }
         # fix size
         dynamic_axes={}
+        if has_r4:
+            input_names=['src', 'r1i', 'r2i', 'r3i', 'r4i']
+            output_names=['res', 'r1o', 'r2o', 'r3o', 'r4o']
+            args=(src, r1i, r2i ,r3i, r4i, downsample_ratio, self.args.seg)
+        else:
+            input_names=['src', 'r1i', 'r2i', 'r3i']
+            output_names=['res', 'r1o', 'r2o', 'r3o']
+            args=(src, r1i, r2i, r3i, None, downsample_ratio, self.args.seg)
         
-        print("seg", self.args.seg)
+        print(f"seg: {self.args.seg}, has_r4: {has_r4}")
         torch.onnx.export(
             model=self.model,
-            args=(src, r1i, r2i ,r3i, r4i, downsample_ratio, self.args.seg),
+            args=args,
             f=self.args.output,
             export_params=True,
             verbose=False,
             opset_version=self.args.opset,
             do_constant_folding=True,
-            input_names=['src', 'r1i', 'r2i', 'r3i', 'r4i', 'downsample_ratio'],
-            output_names=['res', 'r1o', 'r2o', 'r3o', 'r4o'],
+            input_names=input_names,
+            output_names=output_names,
             dynamic_axes=dynamic_axes,
-            )
+        )
 
 if __name__ == '__main__':
     Exporter()

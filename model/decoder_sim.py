@@ -14,14 +14,14 @@ class RecurrentDecoderSim(nn.Module):
         self.avgpool = AvgPool()
         # self.decode4 = BottleneckBlock(feature_channels[3])
         self.chatt3   = ChannelAttention(feature_channels[2], feature_channels[2])
-        self.decode3 = UpsamplingBlock(feature_channels[3], feature_channels[2], 3*4**0, decoder_channels[0])
+        self.decode3 = UpsamplingBlock(feature_channels[3], feature_channels[2], 3*4**0, decoder_channels[0], 0, False)
         self.chatt2   = ChannelAttention(feature_channels[1], feature_channels[1])
-        self.decode2 = UpsamplingBlock(decoder_channels[0], feature_channels[1], 3*4**0, decoder_channels[1])
+        self.decode2 = UpsamplingBlock(decoder_channels[0], feature_channels[1], 3*4**0, decoder_channels[1], 0, False)
         self.chatt1   = ChannelAttention(feature_channels[0], feature_channels[0])
-        self.decode1 = UpsamplingBlock(decoder_channels[1], feature_channels[0], 3*4**0, decoder_channels[2])
+        self.decode1 = UpsamplingBlock(decoder_channels[1], feature_channels[0], 3*4**0, decoder_channels[2], 0, False)
         self.decode0 = OutputBlockNew( decoder_channels[2], 3, decoder_channels[3])
 
-    def forward(self, s0, f1, f2, f3, f4, r1, r2, r3, r4):
+    def forward(self, s0, f1, f2, f3, f4, r1, r2, r3):
         s1, s2, s3 = self.avgpool(s0)
         # x4, r4 = self.decode4(f4, r4)
         f3 = self.chatt3(f3, f3)
@@ -31,7 +31,7 @@ class RecurrentDecoderSim(nn.Module):
         f1 = self.chatt1(f1, f1)
         x1, r1 = self.decode1(x2, f1, s1, r1)
         x0 = self.decode0(x1, s0)
-        return x0, r1, r2, r3, r4
+        return x0, r1, r2, r3
     
 
 class AvgPool(nn.Module):
@@ -76,12 +76,24 @@ class BottleneckBlock(nn.Module):
 
     
 class UpsamplingBlock(nn.Module):
-    def __init__(self, in_channels, skip_channels, src_channels, out_channels):
+    def __init__(self, in_channels, skip_channels, src_channels, out_channels, us_type:int, use_src: bool):
         super().__init__()
         self.out_channels = out_channels
+        self.use_src = use_src
+        us_out = in_channels
         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        # total_in = in_channels + skip_channels + 4
-        total_in = in_channels + skip_channels + 3
+        if us_type == 1:    # shuffle
+            assert(in_channels % 4 == 0)
+            self.use_src = True
+            self.upsample = nn.PixelShuffle(2)
+            us_out = in_channels // 4
+        elif us_type == 2:   # transpose conv
+            self.use_src = True
+            self.upsample = nn.ConvTranspose2d(in_channels, in_channels, kernel_size=2, stride=2)
+        if self.use_src:
+            total_in = us_out + skip_channels + 3
+        else:
+            total_in = us_out + skip_channels + 0
         self.conv = nn.Sequential(
             nn.Conv2d(total_in, total_in, 3, 1, 1, groups=total_in, bias=False),
             nn.BatchNorm2d(total_in),
@@ -96,8 +108,12 @@ class UpsamplingBlock(nn.Module):
         if not torch.onnx.is_in_onnx_export():
             x = x[:, :, :s.size(2), :s.size(3)]
         else:
-            x = CustomOnnxCropToMatchSizeOp.apply(x, s)
-        x = torch.cat([x, f, s], dim=1)
+            x = x
+            # x = CustomOnnxCropToMatchSizeOp.apply(x, s)
+        if self.use_src:
+            x = torch.cat([x, f, s], dim=1)
+        else:
+            x = torch.cat([x, f], dim=1)
         x = self.conv(x)
         a, b = x.split(self.out_channels // 2, dim=1)
         b, r = self.gru(b, r)
@@ -113,8 +129,12 @@ class UpsamplingBlock(nn.Module):
         if not torch.onnx.is_in_onnx_export():
             x = x[:, :, :H, :W]
         else:
-            x = CustomOnnxCropToMatchSizeOp.apply(x, s)
-        x = torch.cat([x, f, s], dim=1)
+            x = x
+            # x = CustomOnnxCropToMatchSizeOp.apply(x, s)
+        if self.use_src:
+            x = torch.cat([x, f, s], dim=1)
+        else:
+            x = torch.cat([x, f], dim=1)
         x = self.conv(x)
         x = x.unflatten(0, (B, T))
         a, b = x.split(self.out_channels // 2, dim=2)
@@ -194,7 +214,8 @@ class OutputBlockNew(nn.Module):
         if not torch.onnx.is_in_onnx_export():
             x = x[:, :, :s.size(1), :s.size(2)]
         else:
-            x = CustomOnnxCropToMatchSizeOp.apply(x, s)
+            x = x
+            # x = CustomOnnxCropToMatchSizeOp.apply(x, s)
         # x = torch.cat([x, s], dim=1)
         x = self.conv(x)
         return x
@@ -204,7 +225,7 @@ class OutputBlockNew(nn.Module):
         x = x.flatten(0, 1)
         s = s.flatten(0, 1)
         x = self.upsample(x)
-        x = x[:, :, :H, :W]
+        # x = x[:, :, :H, :W]
         # x = torch.cat([x, s], dim=1)
         x = self.conv(x)
         x = x.unflatten(0, (B, T))
