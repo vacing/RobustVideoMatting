@@ -13,22 +13,16 @@ class RecurrentDecoderSim(nn.Module):
         super().__init__()
         self.avgpool = AvgPool()
         # self.decode4 = BottleneckBlock(feature_channels[3])
-        self.chatt3   = ChannelAttention(feature_channels[2], feature_channels[2])
-        self.decode3 = UpsamplingBlock(feature_channels[3], feature_channels[2], 3*4**0, decoder_channels[0], 0, False)
-        self.chatt2   = ChannelAttention(feature_channels[1], feature_channels[1])
-        self.decode2 = UpsamplingBlock(decoder_channels[0], feature_channels[1], 3*4**0, decoder_channels[1], 0, False)
-        self.chatt1   = ChannelAttention(feature_channels[0], feature_channels[0])
-        self.decode1 = UpsamplingBlock(decoder_channels[1], feature_channels[0], 3*4**0, decoder_channels[2], 0, False)
+        self.decode3 = UpsamplingBlock(feature_channels[3], feature_channels[2], 3*4**0, decoder_channels[0], 0, True, ratio=3)
+        self.decode2 = UpsamplingBlock(decoder_channels[0], feature_channels[1], 3*4**0, decoder_channels[1], 0, True, ratio=4)
+        self.decode1 = UpsamplingBlock(decoder_channels[1], feature_channels[0], 3*4**0, decoder_channels[2], 0, False, ratio=3)
         self.decode0 = OutputBlockNew( decoder_channels[2], 3, decoder_channels[3])
 
     def forward(self, s0, f1, f2, f3, f4, r1, r2, r3):
         s1, s2, s3 = self.avgpool(s0)
         # x4, r4 = self.decode4(f4, r4)
-        f3 = self.chatt3(f3, f3)
         x3, r3 = self.decode3(f4, f3, s3, r3)
-        f2 = self.chatt2(f2, f2)
         x2, r2 = self.decode2(x3, f2, s2, r2)
-        f1 = self.chatt1(f1, f1)
         x1, r1 = self.decode1(x2, f1, s1, r1)
         x0 = self.decode0(x1, s0)
         return x0, r1, r2, r3
@@ -76,7 +70,7 @@ class BottleneckBlock(nn.Module):
 
     
 class UpsamplingBlock(nn.Module):
-    def __init__(self, in_channels, skip_channels, src_channels, out_channels, us_type:int, use_src: bool):
+    def __init__(self, in_channels, skip_channels, src_channels, out_channels, us_type:int, use_src: bool,  ks=3, ratio=2):
         super().__init__()
         self.out_channels = out_channels
         self.use_src = use_src
@@ -94,14 +88,18 @@ class UpsamplingBlock(nn.Module):
             total_in = us_out + skip_channels + 3
         else:
             total_in = us_out + skip_channels + 0
+        self.chatt = ChannelAttention(skip_channels, in_channels)
+        padding = 1 if ks == 3 else 2
         self.conv = nn.Sequential(
-            nn.Conv2d(total_in, total_in, 3, 1, 1, groups=total_in, bias=False),
+            nn.Conv2d(total_in, total_in, ks, 1, padding=padding, groups=total_in, bias=False),
             nn.BatchNorm2d(total_in),
             nn.Conv2d(total_in, out_channels, 1, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True),
         )
-        self.gru = ConvGRU(out_channels // 2)
+        self.bypass_channels = out_channels // ratio
+        self.gru_channels = out_channels - self.bypass_channels
+        self.gru = ConvGRU(self.gru_channels)
 
     def forward_single_frame(self, x, f, s, r):
         x = self.upsample(x)
@@ -110,12 +108,13 @@ class UpsamplingBlock(nn.Module):
         else:
             x = x
             # x = CustomOnnxCropToMatchSizeOp.apply(x, s)
+        f = self.chatt(f, x)
         if self.use_src:
             x = torch.cat([x, f, s], dim=1)
         else:
             x = torch.cat([x, f], dim=1)
         x = self.conv(x)
-        a, b = x.split(self.out_channels // 2, dim=1)
+        a, b = x.split([self.bypass_channels, self.gru_channels], dim=1)
         b, r = self.gru(b, r)
         x = torch.cat([a, b], dim=1)
         return x, r
@@ -131,13 +130,14 @@ class UpsamplingBlock(nn.Module):
         else:
             x = x
             # x = CustomOnnxCropToMatchSizeOp.apply(x, s)
+        f = self.chatt(f, x)
         if self.use_src:
             x = torch.cat([x, f, s], dim=1)
         else:
             x = torch.cat([x, f], dim=1)
         x = self.conv(x)
         x = x.unflatten(0, (B, T))
-        a, b = x.split(self.out_channels // 2, dim=2)
+        a, b = x.split([self.bypass_channels, self.gru_channels], dim=2)
         b, r = self.gru(b, r)
         x = torch.cat([a, b], dim=2)
         return x, r
@@ -196,12 +196,14 @@ class OutputBlockNew(nn.Module):
         super().__init__()
         self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
         rin_channels = in_channels
-        self.conv = nn.Sequential(
+        self.conv1 = nn.Sequential(
             nn.Conv2d(rin_channels, rin_channels, 3, 1, 1, groups=rin_channels, bias=False),
             nn.BatchNorm2d(rin_channels),
             nn.Conv2d(rin_channels, out_channels, 1, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(True),
+        )
+        self.conv2 = nn.Sequential(
             nn.Conv2d(out_channels, out_channels, 3, 1, padding=2, groups=out_channels, bias=False, dilation=2),
             nn.BatchNorm2d(out_channels),
             nn.Conv2d(out_channels, out_channels, 1, bias=False),
@@ -217,7 +219,8 @@ class OutputBlockNew(nn.Module):
             x = x
             # x = CustomOnnxCropToMatchSizeOp.apply(x, s)
         # x = torch.cat([x, s], dim=1)
-        x = self.conv(x)
+        x = self.conv1(x)
+        x = self.conv2(x)
         return x
     
     def forward_time_series(self, x, s):
@@ -227,7 +230,8 @@ class OutputBlockNew(nn.Module):
         x = self.upsample(x)
         # x = x[:, :, :H, :W]
         # x = torch.cat([x, s], dim=1)
-        x = self.conv(x)
+        x = self.conv1(x)
+        x = self.conv2(x)
         x = x.unflatten(0, (B, T))
         return x
     
@@ -243,7 +247,12 @@ class ProjectionSim(nn.Module):
         padding = 0
         if kernel == 3:
             padding = 1
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel, padding=padding)
+        # self.conv = nn.Conv2d(in_channels, out_channels, kernel, padding=padding)
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, in_channels, kernel, padding=padding, groups=in_channels, bias=False),
+            nn.BatchNorm2d(in_channels),
+            nn.Conv2d(in_channels, out_channels, 1),
+        )
     
     def forward_single_frame(self, x):
         return self.conv(x)

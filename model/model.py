@@ -30,6 +30,7 @@ class MattingNetwork(nn.Module):
         lraspp_out = int(sim_ratio * 128)
         Decoder = RecurrentDecoder
         Project = Projection
+        kernel_out = 3
         # rvm_sim_big = rvm_small
         if decoder in ["rvm_sim", "rvm_sim_small"]:
             Decoder = RecurrentDecoderSim
@@ -41,7 +42,7 @@ class MattingNetwork(nn.Module):
         dec_out = [int(sim_ratio * v) for v in [80, 40, 32, 16]]
         if decoder in ["rvm_small", "rvm_sim_small"]:
             # dec input, 128, 32, 24, 16 -> ri: 64, 16, 12, 8
-            dec_out = [int(sim_ratio * v) for v in [32, 24, 12, 4]]
+            dec_out = [int(sim_ratio * v) for v in [24, 16, 12, 4]]
         elif decoder in ["gg"]:
             # dec input, 128, 24, 16, 16 -> ri: 64, 12, 8, 8
             dec_out = [int(sim_ratio * v) for v in [24, 16, 16, 4]]
@@ -70,14 +71,14 @@ class MattingNetwork(nn.Module):
             self.decoder = Decoder([64, 256, 512, 256], [128, 64, 32, 16])
             
         self.project_mat = Project(dec_out[3], 4)
-        self.project_seg = Project(dec_out[3], 1, kernel=3)
+        self.project_seg = Project(dec_out[3], 1, kernel=kernel_out)
 
         if refiner == 'deep_guided_filter':
             self.refiner = DeepGuidedFilterRefiner()
         else:
             self.refiner = FastGuidedFilterRefiner()
         
-    def forward(self, src, r1, r2, r3, r4 = None,
+    def forward(self, src, r1 = None, r2 = None, r3 = None, r4 = None,
                 downsample_ratio: float = 0.25,
                 segmentation_pass: bool = True):
         

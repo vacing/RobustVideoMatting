@@ -28,22 +28,34 @@ class LRASPP(nn.Module):
         else:
             return self.forward_single_frame(x)
 
+# https://github.com/LeeJunHyun/Image_Segmentation/blob/db34de21767859e035aee143c59954fa0d94bbcd/network.py#L108
 class ChannelAttention(nn.Module):
-    def __init__(self, in_channels, ref_channels):
+    def __init__(self, x_channels, g_channels):
         super().__init__()
-        self.aspp1 = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels, 1, bias=False),
-            nn.BatchNorm2d(in_channels),
-            nn.ReLU(True)
+        self.wx = nn.Sequential(
+            nn.Conv2d(x_channels, x_channels, 1, bias=False),
+            nn.BatchNorm2d(x_channels),
         )
-        self.att = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(ref_channels, in_channels, 1, bias=False),
+        self.wg = nn.Sequential(
+            nn.Conv2d(g_channels, x_channels, 1, bias=False),
+            nn.BatchNorm2d(x_channels),
+        )
+        self.relu = nn.ReLU(inplace=True)
+
+        self.psi = nn.Sequential(
+            nn.Conv2d(x_channels, 1, 1, bias=False),
+            nn.BatchNorm2d(1),
             nn.Sigmoid()
         )
+        # self.lraspp = LRASPP(x_channels, x_channels)
         
     def forward_single_frame(self, x, ref):
-        return self.att(x) * self.aspp1(x)
+        x1 = self.wx(x)
+        g1 = self.wg(ref)
+        psi = self.relu(g1+x1)
+        psi = self.psi(psi)
+        # x = self.lraspp(x)
+        return x * psi
     
     def forward_time_series(self, x, ref):
         B, T = x.shape[:2]

@@ -45,23 +45,24 @@ class Exporter:
         self.precision = torch.float32 if self.args.precision == 'float32' else torch.float16
         self.model = MattingNetwork(self.args.model_variant, decoder=self.args.model_decoder, refiner=self.args.refiner).\
                                     eval().to(self.args.device, self.precision)
-        self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device)["model_state"], strict=False)
+        self.model.load_state_dict(torch.load(self.args.checkpoint, map_location=self.args.device)["model_state"], strict=True)
         
     def export(self):
         # downsample_ratio = torch.tensor([0.25]).to(self.args.device)
         # src = torch.randn(1, 3, 640, 720).to(self.args.device, self.precision)
         downsample_ratio = torch.tensor([1]).to(self.args.device)
         sim_ratio = 1
-        iw = 192
-        ih = 192
+        iw = 192    # 144
+        ih = 192    # 256
         src_size = [1, 3, math.ceil(iw), math.ceil(ih)]
         dec_in = [0, 16, 20, 40, 64]
-        has_r4 = True
+        rx_type = 3
         if self.args.model_decoder in ["rvm_small", "rvm_sim_small"]:
-            has_r4 = False
-            dec_in = [0, 6, 12, 16, 64]
+            rx_type = 3
+            # dec_in = [0, 6, 12, 16, 64]
+            dec_in = [0, 8, 12, 16, 64]
         elif self.args.model_decoder in ["gg"]:
-            has_r4 = False
+            rx_type = 0
             dec_in = [0, 8, 8, 12, 64]
         r1_size = [1, math.ceil(dec_in[1] * sim_ratio), math.ceil(src_size[2] / 2), math.ceil(src_size[3] / 2)]
         r2_size = [1, math.ceil(dec_in[2] * sim_ratio), math.ceil(r1_size[2] / 2), math.ceil(r1_size[3] / 2)]
@@ -90,16 +91,20 @@ class Exporter:
             }
         # fix size
         dynamic_axes={}
-        if has_r4:
+        if rx_type == 4:
             input_names=['src', 'r1i', 'r2i', 'r3i', 'r4i']
             output_names=['res', 'r1o', 'r2o', 'r3o', 'r4o']
             args=(src, r1i, r2i ,r3i, r4i, downsample_ratio, self.args.seg)
-        else:
+        elif rx_type == 3:
             input_names=['src', 'r1i', 'r2i', 'r3i']
             output_names=['res', 'r1o', 'r2o', 'r3o']
             args=(src, r1i, r2i, r3i, None, downsample_ratio, self.args.seg)
+        else:
+            input_names=['src']
+            output_names=['res']
+            args=(src, None, None, None, None, downsample_ratio, self.args.seg)
         
-        print(f"seg: {self.args.seg}, has_r4: {has_r4}")
+        print(f"seg: {self.args.seg}, rx_type: {rx_type}")
         torch.onnx.export(
             model=self.model,
             args=args,

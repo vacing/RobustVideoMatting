@@ -350,6 +350,7 @@ class MobileNetV3SmallerEncoder(MobileNetV3):
         del self.features[12]
         del self.features[11]
         del self.features[10]
+        # del self.features[9]
         
     def forward_single_frame(self, x):
         x = normalize(x, [0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
